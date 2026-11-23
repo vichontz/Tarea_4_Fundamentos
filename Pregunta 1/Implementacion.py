@@ -42,3 +42,19 @@ def reconstruir_piramide(detalles, residuo):
     for d in reversed(detalles):
         c = d + expandir(c, d.shape)
     return c
+
+
+def starlet(imagen, escalas=5):
+   #Devuelve ([w_1..w_escalas], c_escalas), w_j = c_{j-1} - c_j.
+    capas, c = [], imagen
+    for j in range(escalas):
+        h = np.zeros(4 * 2**j + 1)
+        h[:: 2**j] = B3
+        c_sig = suavizar(c, h)
+        capas.append(c - c_sig)
+        c = c_sig
+    return capas, c
+
+
+def reconstruir_starlet(capas, residuo):
+    return residuo + sum(capas)
