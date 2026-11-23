@@ -18,3 +18,27 @@ def suavizar(c, h):
 
 def reducir(c):
     return suavizar(c, B3)[::2, ::2]
+
+
+def expandir(c, forma):
+    z = np.zeros(forma)
+    z[::2, ::2] = c
+    return 4 * suavizar(z, B3)
+
+
+def piramide_laplaciana(imagen, niveles=5):
+    #([d_1..d_niveles], c_niveles) con d_j = c_{j-1} - U(c_j).
+    detalles, c = [], imagen
+    for _ in range(niveles):
+        c_sig = reducir(c)
+        detalles.append(c - expandir(c_sig, c.shape))
+        c = c_sig
+    return detalles, c
+
+
+def reconstruir_piramide(detalles, residuo):
+    #c_{j-1} = d_j + U(c_j), desde el nivel mas grueso hasta el original.
+    c = residuo
+    for d in reversed(detalles):
+        c = d + expandir(c, d.shape)
+    return c
