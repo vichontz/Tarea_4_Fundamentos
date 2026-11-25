@@ -1,14 +1,8 @@
-# Implemente una pirámide Laplaciana de cinco niveles (más el residual). En cada nivel, obtenga una versión 
-# suavizada y reducida por un factor 2. Defina la capa de detalle como la diferencia entre la imagen del nivel 
-# actual y la aproximación obtenida al expandir el siguiente nivel hasta el mismo tamaño. La interpolación y el 
-# filtro de suavizado utilizados deben quedar explícitos y ser consistentes entre descomposición y 
-# reconstrucción. 
-# dⱼ = cⱼ₋₁ − U(cⱼ),      j = 1,2,3 
-
 import numpy as np
 from scipy.ndimage import convolve1d
 
-
+import tifffile
+import sys
 B3 = np.array([1, 4, 6, 4, 1]) / 16
  
 def suavizar(c, h):
@@ -58,3 +52,53 @@ def starlet(imagen, escalas=5):
 
 def reconstruir_starlet(capas, residuo):
     return residuo + sum(capas)
+
+
+
+def cargar_luminancia(ruta, canales=3):
+    rgb = tifffile.imread(ruta).astype(np.float64)[..., :canales]
+    return 0.2126 * rgb[..., 0] + 0.7152 * rgb[..., 1] + 0.0722 * rgb[..., 2]
+
+
+def compresion_global(Y, clave=0.18, eps=1e-6):
+    Ys = clave * Y / np.exp(np.mean(np.log(Y + eps)))
+    L = Ys / (1 + Ys)
+    return (L - L.min()) / (L.max() - L.min())
+
+
+def rmse(a, b):
+    return np.sqrt(np.mean((a - b) ** 2))
+
+
+if __name__ == "__main__":
+    import sys
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    RUTA = sys.argv[1] if len(sys.argv) > 1 else "Archivos_t4/memorial.tif"
+    NIVELES = 5
+
+    
+    Y = cargar_luminancia(RUTA)
+    I = compresion_global(Y)
+    print(f"Imagen: {RUTA}  forma={I.shape}")
+    print(f"Luminancia HDR: min={Y.min():.4g} max={Y.max():.4g}  ->  comprimida: [{I.min():.2f}, {I.max():.2f}]")
+
+    
+    d_lap, c_lap = piramide_laplaciana(I, NIVELES)
+    w_star, c_star = starlet(I, NIVELES)
+
+    #Reconstruimos
+    I_lap = reconstruir_piramide(d_lap, c_lap)
+    I_star = reconstruir_starlet(w_star, c_star)
+    print(f"\nRMSE reconstruccion piramide Laplaciana: {rmse(I, I_lap):.3e}")
+    print(f"RMSE reconstruccion starlet:             {rmse(I, I_star):.3e}")
+
+    
+    print("\nPiramide Laplaciana:")
+    for j, d in enumerate(d_lap, 1):
+        print(f"  d_{j}: {d.shape}")
+    print(f"  residuo c_{NIVELES}: {c_lap.shape}")
+    n_lap = sum(d.size for d in d_lap) + c_lap.size
+    print(f"  coeficientes / pixeles = {n_lap / I.size:.3f}")
+    print(f"Starlet: {NIVELES} capas + residuo, todas {I.shape}  ->  coeficientes / pixeles = {NIVELES + 1}")
